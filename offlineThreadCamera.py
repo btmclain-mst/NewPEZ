@@ -125,8 +125,8 @@ class CavitarVideoDisplay:
 			print('could not set internal free run mode')
 			
 
-		self.camera.f.ExposureTime.Set(20.0)
-		self.camera.f.Gain.Set(11)
+		self.camera.f.ExposureTime.Set(100.0)
+		self.camera.f.Gain.Set(15)
 
 		self.camera.f.LineSelector.SetString('Line2')
 		self.camera.f.LineMode.SetString('Output')
@@ -151,6 +151,7 @@ class CavitarVideoDisplay:
 			if img:
 				frame = img.GetNPArray()
 				if self.state_flag.value == 1:
+					height, width = frame.shape[:2]
 					self.record_queue.put(frame)
 				self.display_queue.put(frame)
 			else:
@@ -186,11 +187,11 @@ class CavitarVideoDisplay:
 		cv2.destroyAllWindows() 
 
 	def record_frames(self):
-		name = str(time.time())
-		out = cv2.VideoWriter(name+'.mp4', self.fourcc, self.fps, (self.width, self.height))
+		out = cv2.VideoWriter(str(time.time())+'.mp4', self.fourcc, self.fps, (self.width, self.height))
 		while True:
 			if not self.record_queue.empty():
 				record_frame = self.record_queue.get()
+				record_frame = cv2.cvtColor(record_frame, cv2.COLOR_GRAY2BGR)
 				if record_frame is not None: 
 					out.write(record_frame)
 				else:
@@ -199,7 +200,8 @@ class CavitarVideoDisplay:
 			if self.close_video.value == True:
 				while not self.record_queue.empty():
 					record_frame = self.record_queue.get()
-					if record_frame is not None: 
+					record_frame = cv2.cvtColor(record_frame, cv2.COLOR_GRAY2BGR)
+					if record_frame is not None:
 						out.write(record_frame)
 						print('dumping last frames')
 					else:
@@ -207,7 +209,7 @@ class CavitarVideoDisplay:
 
 				out.release()
 					
-				out = cv2.VideoWriter(name+'.mp4', self.fourcc, self.fps, (self.width, self.height))
+				out = cv2.VideoWriter(str(time.time())+'.mp4', self.fourcc, self.fps, (self.width, self.height))
 				self.close_video.value = False
 
 			if self.state_flag.value == 3:
@@ -229,7 +231,7 @@ def on_press(key):
 			pressed_p = True
 		if key.char == 'r':
 			pressed_r = True
-		if key.char == 'r':
+		if key.char == 's':
 			pressed_s = True
 	except AttributeError:
 		if key == keyboard.Key.esc:
@@ -259,16 +261,20 @@ if __name__ == "__main__":
 	listener.start()
 
 	pressed_p = False
+	pressed_s = False
+	pressed_r = False
 
 	#CHECK FOR USER INPUTS
 	while True:
 		if pressed_r:
 			print(f'\nSTARTED RECORDING')
 			cavitar_camera.state_flag.value = 1
+			pressed_r = False
 		if pressed_s:
 			print(f'\nSTOPPED RECORDING')
 			cavitar_camera.state_flag.value = 0
 			cavitar_camera.close_video.value = True
+			pressed_s = False
 		if pressed_p:
 			print('\nCLOSING')
 			meltpool_camera.state_flag.value = 3
