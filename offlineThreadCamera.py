@@ -279,7 +279,15 @@ if __name__ == "__main__":
 			print('\nCLOSING')
 			meltpool_camera.state_flag.value = 3
 			cavitar_camera.state_flag.value = 3
-			
+			meltpool_camera.display_process.join()
+			cavitar_camera.display_process.join()
+			print('display processes are dead')
+			meltpool_camera.capture_frames.join()
+			cavitar_camera.capture_frames.join()
+			print('capture processes are dead')
+			cavitar_camera.record_frames.join()
+			print('record process is dead')
+			print('program closed gracefully')
 			break
 		time.sleep(.01)
 
