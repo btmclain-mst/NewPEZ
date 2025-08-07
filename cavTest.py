@@ -13,6 +13,8 @@ if camera.f.ExposureMode.IsWritable():
 else:
 	print('Could not set timed exposure mode')
 
+
+
 # Set trigger mode
 if camera.f.TriggerMode.IsWritable():
 	camera.f.TriggerMode.SetString("Off")  # internal/free-run
