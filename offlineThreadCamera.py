@@ -63,25 +63,20 @@ class USBVideoDisplay:
 		self.state_flag.value = 4
 
 	def display_frames(self):
-		crop = False
-		roi_height = 1080
-		roi_width = 1440
+		#crop display if desired
+		crop = True
+		fx, fy = 0.5, 1.0  
+		cx, cy = self.width // 2, self.height // 2
+		rw, rh = int(self.width * fx / 2), int(self.height * fy / 2)
 		cv2.namedWindow('Meltpool',cv2.WINDOW_NORMAL)
+
 		while True:
 			if not self.display_queue.empty():
 				frame = self.display_queue.get()
-				if crop:
-					cx, cy = self.width//2,self.height//2
-					x1 = max(cx-roi_width //2,0)
-					x2 = min(cx+roi_width//2,self.width)
-					y1 = max(cy - roi_height //2,0)
-					y2 = min(cy+roi_height//2,self.height)
-					roi = frame[y1:y2,x1:x2]
-					cv2.imshow('Meltpool, cropped',roi)
-					cv2.waitKey(1)
-				else:
-					cv2.imshow("Meltpool", frame)
-					cv2.waitKey(1)
+				cx, cy = self.width//2,self.height//2
+				frame = frame[cy - rh:cy + rh, cx - rw:cx + rw]
+				cv2.imshow('Meltpool, cropped',frame)
+				cv2.waitKey(1)
 			if self.state_flag.value == 4:
 				break
 
@@ -102,6 +97,7 @@ class CavitarVideoDisplay:
 		self.record_queue = Queue(maxsize=600)
 		self.state_flag = Value('i', 0)
 		self.close_video = Value('b', False)  # Shared flag to stop processes
+		self.temperature = Value('i',0)
 		self.fourcc = cv2.VideoWriter_fourcc(*'mp4v')
 		self.width=1440
 		self.height=1080
@@ -146,7 +142,8 @@ class CavitarVideoDisplay:
 		print(f' the device temperature is {self.camera.f.DeviceTemperature.Get()}')
 		
 		while True:
-			start_time = time.time()
+			#SEE HOW LONG THIS TAKES BEFORE IMPLEMENTING
+			#self.temperature.value = self.camera.f.DeviceTemperature.Get()
 			img = self.camera.GetImage()
 			if img:
 				frame = img.GetNPArray()
@@ -168,10 +165,11 @@ class CavitarVideoDisplay:
 
 	def display_frames(self):
 		cv2.namedWindow('Cavitar',cv2.WINDOW_NORMAL)
+
 		while True:
 			if not self.display_queue.empty():
 				frame = self.display_queue.get()
-				#frame = cv2.putText(frame,f'Temp: {self.camera.f.DeviceTemperature.Get()}',(10,130), cv2.FONT_HERSHEY_SIMPLEX, 2, (255,255,255), 2, cv2.LINE_AA)
+				frame = cv2.putText(frame,f'Temp is {self.temperature.value}',(10,130), cv2.FONT_HERSHEY_SIMPLEX, 2, (255,255,255), 2, cv2.LINE_AA)
 				if self.state_flag.value == 1:
 					frame = cv2.putText(frame,'Recording',(10,130), cv2.FONT_HERSHEY_SIMPLEX, 2, (255,255,255), 2, cv2.LINE_AA)
 				cv2.imshow("Cavitar", frame)
