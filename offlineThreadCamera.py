@@ -64,7 +64,6 @@ class USBVideoDisplay:
 
 	def display_frames(self):
 		#crop display if desired
-		crop = True
 		fx, fy = 0.5, 1.0  
 		cx, cy = self.width // 2, self.height // 2
 		rw, rh = int(self.width * fx / 2), int(self.height * fy / 2)
@@ -105,45 +104,50 @@ class CavitarVideoDisplay:
 
 
 	def capture_frames(self):
-		self.camera = neoapi.Cam()
-		self.camera.Connect()
-		
-		print(f'camera connected')
-		
-		if self.camera.f.ExposureMode.IsWritable():
-			self.camera.f.ExposureMode.SetString('Timed')
-		else:
-			print('could not set timed exposure mode')
-			
-		if self.camera.f.TriggerMode.IsWritable():
-			self.camera.f.TriggerMode.SetString("Off")  # internal/free-run
-		else:
-			print('could not set internal free run mode')
-			
+		camera = neoapi.Cam()
+		camera.Connect()
 
-		self.camera.f.ExposureTime.Set(100.0)
-		self.camera.f.Gain.Set(15)
+		# --- Basic image settings ---
+		camera.f.ExposureMode.SetString('Timed')
+		camera.f.TriggerMode.SetString('Off')
+		camera.f.ExposureAuto.SetString('Off')
+		camera.f.GainAuto.SetString('Off')
+		camera.f.PixelFormat.SetString('Mono8')
 
-		self.camera.f.LineSelector.SetString('Line2')
-		self.camera.f.LineMode.SetString('Output')
-		self.camera.f.LineSource.SetString('ExposureActive')
+		# Set short exposure and gain
+		camera.f.ExposureTime.Set(4.0)  # in µs
+		camera.f.Gain.Set(11)
 
+		# Set resolution
+		camera.f.Width.Set(self.width)
+		camera.f.Height.Set(self.height)
 
-		if self.camera.f.Width.IsWritable():
-			self.camera.f.Width.Set(self.width)
-		else:
-			print('could not set width')
-		if self.camera.f.Height.IsWritable():
-			self.camera.f.Height.Set(self.height)
-		else:
-			print('could not set height')
+		# --- Set fixed frame rate ---
+		camera.f.AcquisitionFrameRateEnable.Set(True)
+		camera.f.AcquisitionFrameRate.Set(self.fps)
 
-		print(f' the line mode is set to an {self.camera.f.LineMode.GetString()}')
-		print(f' the device temperature is {self.camera.f.DeviceTemperature.Get()}')
-		
+		# --- Timer1: delay laser pulse after exposure start ---
+		camera.f.TimerSelector.SetString("Timer1")
+		camera.f.TimerTriggerSource.SetString("ExposureStart")
+		camera.f.TimerDelay.Set(1.0)      # Delay laser pulse 1 µs after exposure
+		camera.f.TimerDuration.Set(3.0)   # Pulse duration ~3 µs
+
+		# --- Line2: fire laser during Timer1Active ---
+		camera.f.LineSelector.SetString("Line2")
+		camera.f.LineMode.SetString("Output")
+		camera.f.LineSource.SetString("Timer1Active")
+		camera.f.LineInverter.Set(True)
+
+		camera.f.ExposureTime.Set(4.0)  # in µs
+
+		# Confirm camera is ready
+		print(f'FPS: {camera.f.AcquisitionFrameRate.Get()}')
+		print(f'ExposureTime: {camera.f.ExposureTime.Get()}')
+		print(f'Gain: {camera.f.Gain.Get()}')
+
 		while True:
 			#SEE HOW LONG THIS TAKES BEFORE IMPLEMENTING
-			#self.temperature.value = self.camera.f.DeviceTemperature.Get()
+			self.temperature.value = self.camera.f.DeviceTemperature.Get()
 			img = self.camera.GetImage()
 			if img:
 				frame = img.GetNPArray()
@@ -158,6 +162,7 @@ class CavitarVideoDisplay:
 
 			if self.state_flag.value == 3:
 				break
+
 		self.camera.f.LineSource.SetString('Off')
 		self.camera.Disconnect()
 		
@@ -169,7 +174,8 @@ class CavitarVideoDisplay:
 		while True:
 			if not self.display_queue.empty():
 				frame = self.display_queue.get()
-				frame = cv2.putText(frame,f'Temp is {self.temperature.value}',(10,130), cv2.FONT_HERSHEY_SIMPLEX, 2, (255,255,255), 2, cv2.LINE_AA)
+				if self.temperature.value != 0:
+					frame = cv2.putText(frame,f'Temp is {self.temperature.value}',(10,130), cv2.FONT_HERSHEY_SIMPLEX, 2, (255,255,255), 2, cv2.LINE_AA)
 				if self.state_flag.value == 1:
 					frame = cv2.putText(frame,'Recording',(10,130), cv2.FONT_HERSHEY_SIMPLEX, 2, (255,255,255), 2, cv2.LINE_AA)
 				cv2.imshow("Cavitar", frame)
@@ -224,6 +230,7 @@ def on_press(key):
 	global pressed_p
 	global pressed_r
 	global pressed_s
+
 	try:
 		if key.char == 'p':
 			pressed_p = True
