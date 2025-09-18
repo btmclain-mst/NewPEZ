@@ -106,6 +106,10 @@ class CavitarVideoDisplay:
 	def capture_frames(self):
 		camera = neoapi.Cam()
 		camera.Connect()
+		if camera.f.ShortExposureTimeEnable.IsReadable():
+			# Enable the feature
+			camera.f.ShortExposureTimeEnable.value = True
+			print("ShortExposureTimeEnable has been enabled.")
 
 		# --- Set fixed frame rate ---
 		camera.f.AcquisitionFrameRateEnable.Set(True)
