@@ -74,7 +74,7 @@ class USBVideoDisplay:
 				frame = self.display_queue.get()
 				cx, cy = self.width//2,self.height//2
 				frame = frame[cy - rh:cy + rh, cx - rw:cx + rw]
-				cv2.imshow('Meltpool, cropped',frame)
+				cv2.imshow('Meltpool',frame)
 				cv2.waitKey(1)
 			if self.state_flag.value == 4:
 				break
@@ -96,7 +96,7 @@ class CavitarVideoDisplay:
 		self.record_queue = Queue(maxsize=600)
 		self.state_flag = Value('i', 0)
 		self.close_video = Value('b', False)  # Shared flag to stop processes
-		self.temperature = Value('i',0)
+		self.temperature = Value('f',0.0)
 		self.fourcc = cv2.VideoWriter_fourcc(*'mp4v')
 		self.width=1440
 		self.height=1080
@@ -107,6 +107,11 @@ class CavitarVideoDisplay:
 		camera = neoapi.Cam()
 		camera.Connect()
 
+		# --- Set fixed frame rate ---
+		camera.f.AcquisitionFrameRateEnable.Set(True)
+		camera.f.AcquisitionFrameRate.Set(self.fps)
+
+		
 		# --- Basic image settings ---
 		camera.f.ExposureMode.SetString('Timed')
 		camera.f.TriggerMode.SetString('Off')
@@ -114,19 +119,18 @@ class CavitarVideoDisplay:
 		camera.f.GainAuto.SetString('Off')
 		camera.f.PixelFormat.SetString('Mono8')
 
+
 		# Set short exposure and gain
-		camera.f.ExposureTime.Set(4.0)  # in µs
+		camera.f.ExposureTime.Set(3.0)  # in µsp
 		camera.f.Gain.Set(11)
 
 		# Set resolution
 		camera.f.Width.Set(self.width)
 		camera.f.Height.Set(self.height)
 
-		# --- Set fixed frame rate ---
-		camera.f.AcquisitionFrameRateEnable.Set(True)
-		camera.f.AcquisitionFrameRate.Set(self.fps)
 
-		# --- Timer1: delay laser pulse after exposure start ---
+
+		# --- Timer1: delay laser pulse after exposure startp ---
 		camera.f.TimerSelector.SetString("Timer1")
 		camera.f.TimerTriggerSource.SetString("ExposureStart")
 		camera.f.TimerDelay.Set(1.0)      # Delay laser pulse 1 µs after exposure
@@ -144,11 +148,16 @@ class CavitarVideoDisplay:
 		print(f'FPS: {camera.f.AcquisitionFrameRate.Get()}')
 		print(f'ExposureTime: {camera.f.ExposureTime.Get()}')
 		print(f'Gain: {camera.f.Gain.Get()}')
+		
+		temp_counter = 0
 
 		while True:
 			#SEE HOW LONG THIS TAKES BEFORE IMPLEMENTING
-			self.temperature.value = self.camera.f.DeviceTemperature.Get()
-			img = self.camera.GetImage()
+			temp_counter += 1
+			if temp_counter > self.fps:
+				self.temperature.value = camera.f.DeviceTemperature.Get()
+				temp_counter = 0
+			img = camera.GetImage()
 			if img:
 				frame = img.GetNPArray()
 				if self.state_flag.value == 1:
@@ -163,8 +172,8 @@ class CavitarVideoDisplay:
 			if self.state_flag.value == 3:
 				break
 
-		self.camera.f.LineSource.SetString('Off')
-		self.camera.Disconnect()
+		camera.f.LineSource.SetString('Off')
+		camera.Disconnect()
 		
 		self.state_flag.value = 4
 
@@ -175,7 +184,7 @@ class CavitarVideoDisplay:
 			if not self.display_queue.empty():
 				frame = self.display_queue.get()
 				if self.temperature.value != 0:
-					frame = cv2.putText(frame,f'Temp is {self.temperature.value}',(10,130), cv2.FONT_HERSHEY_SIMPLEX, 2, (255,255,255), 2, cv2.LINE_AA)
+					frame = cv2.putText(frame,f'Temp: {self.temperature.value}C',(10,self.height-35), cv2.FONT_HERSHEY_SIMPLEX, 2, (255,255,255), 2, cv2.LINE_AA)
 				if self.state_flag.value == 1:
 					frame = cv2.putText(frame,'Recording',(10,130), cv2.FONT_HERSHEY_SIMPLEX, 2, (255,255,255), 2, cv2.LINE_AA)
 				cv2.imshow("Cavitar", frame)
@@ -284,13 +293,13 @@ if __name__ == "__main__":
 			print('\nCLOSING')
 			meltpool_camera.state_flag.value = 3
 			cavitar_camera.state_flag.value = 3
-			meltpool_camera.display_process.join()
-			cavitar_camera.display_process.join()
+			meltpool_display_process.join()
+			cavitar_display_process.join()
 			print('display processes are dead')
-			meltpool_camera.capture_frames.join()
-			cavitar_camera.capture_frames.join()
+			meltpool_capture_process.join()
+			cavitar_capture_process.join()
 			print('capture processes are dead')
-			cavitar_camera.record_frames.join()
+			cavitar_record_process.join()
 			print('record process is dead')
 			print('program closed gracefully')
 			break
